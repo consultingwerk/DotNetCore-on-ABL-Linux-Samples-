@@ -1,0 +1,9 @@
+# throw-away certificate material (never commit keys)
+03-security/certs/
+# generated test data and build output
+/tmp-tree/
+05-benchmarks/results-*.md
+05-benchmarks/results-*.csv
+08-facade/**/bin/
+08-facade/**/obj/
+*.r

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="902" viewBox="0 0 1920 902">
+<rect width="1920" height="902" rx="14" fill="#11151c"/>
+<rect width="1920" height="46" rx="14" fill="#1b212b"/>
+<circle cx="28" cy="23" r="7" fill="#ff5f57"/><circle cx="52" cy="23" r="7" fill="#febc2e"/><circle cx="76" cy="23" r="7" fill="#28c840"/>
+<text x="104" y="30" font-family="monospace" font-size="19" fill="#6b7684">demo3 - X.509 certificates</text>
+<text x="34" y="76" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#7fb3ff" xml:space="preserve">== Demo 3: X.509 certificates ==</text>
+<text x="34" y="109" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve"></text>
+<text x="34" y="142" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#7fb3ff" xml:space="preserve">---------- ABL today: sslc via OS-COMMAND ----------</text>
+<text x="34" y="175" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">sslc  subject   : CN=partner.example, O=PUG Challenge Demo</text>
+<text x="34" y="208" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">sslc  notAfter  : Feb 4 16:09:56 2029 GMT</text>
+<text x="34" y="241" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">sslc  as DATETIME: 02/04/2029 16:09:56.000</text>
+<text x="34" y="274" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">sslc  days left  : 824</text>
+<text x="34" y="307" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#8fd98f" xml:space="preserve">sslc  valid      : yes</text>
+<text x="34" y="340" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve"></text>
+<text x="34" y="373" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#7fb3ff" xml:space="preserve">---------- .NET: X509Certificate2 + X509Chain ----------</text>
+<text x="34" y="406" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#6b7684" xml:space="preserve">-- partner.pem (signed by our CA) --</text>
+<text x="34" y="439" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  subject   : O=PUG Challenge Demo, CN=partner.example</text>
+<text x="34" y="472" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  issuer    : O=PUG Challenge Demo, CN=Demo Root CA</text>
+<text x="34" y="505" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  notAfter  : 02/04/2029 17:09:56.000</text>
+<text x="34" y="538" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  days left  : 824</text>
+<text x="34" y="571" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#8fd98f" xml:space="preserve">.NET  valid      : yes</text>
+<text x="34" y="604" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve"></text>
+<text x="34" y="637" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#6b7684" xml:space="preserve">-- stranger.pem (signed by an unrelated CA) --</text>
+<text x="34" y="670" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  subject   : O=PUG Challenge Demo, CN=stranger.example</text>
+<text x="34" y="703" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  issuer    : O=PUG Challenge Demo, CN=Unrelated Root CA</text>
+<text x="34" y="736" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  notAfter  : 02/04/2029 17:09:56.000</text>
+<text x="34" y="769" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">.NET  days left  : 824</text>
+<text x="34" y="802" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#ff8a8a" xml:space="preserve">.NET  valid      : no</text>
+<text x="34" y="835" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#ff8a8a" xml:space="preserve">      reason     : PartialChain - unable to get local issuer certificate</text>
+</svg>

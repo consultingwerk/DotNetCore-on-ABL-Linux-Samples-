@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="704" viewBox="0 0 1920 704">
+<rect width="1920" height="704" rx="14" fill="#11151c"/>
+<rect width="1920" height="46" rx="14" fill="#1b212b"/>
+<circle cx="28" cy="23" r="7" fill="#ff5f57"/><circle cx="52" cy="23" r="7" fill="#febc2e"/><circle cx="76" cy="23" r="7" fill="#28c840"/>
+<text x="104" y="30" font-family="monospace" font-size="19" fill="#6b7684">demo1 - files and zip</text>
+<text x="34" y="76" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#7fb3ff" xml:space="preserve">== Demo 1: files and zip ==</text>
+<text x="34" y="109" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">tree: /data/tree</text>
+<text x="34" y="142" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve"></text>
+<text x="34" y="175" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">walk-abl   files: 3400   ms: 30</text>
+<text x="34" y="208" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">walk-net   files: 3400   ms: 48</text>
+<text x="34" y="241" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve"></text>
+<text x="34" y="274" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">zip        entries: 10000   ms: 172   archive: /tmp/data/in.zip</text>
+<text x="34" y="307" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">first 10 entries:</text>
+<text x="34" y="340" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file65.json 41</text>
+<text x="34" y="373" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file24.xml 41</text>
+<text x="34" y="406" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file89.json 41</text>
+<text x="34" y="439" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file30.xml 41</text>
+<text x="34" y="472" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file79.txt 41</text>
+<text x="34" y="505" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file85.txt 41</text>
+<text x="34" y="538" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file20.json 41</text>
+<text x="34" y="571" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file27.xml 41</text>
+<text x="34" y="604" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file34.txt 41</text>
+<text x="34" y="637" font-family="DejaVu Sans Mono,Menlo,monospace" font-size="23" fill="#d8dee9" xml:space="preserve">   dir1/sub0/file92.json 41</text>
+</svg>

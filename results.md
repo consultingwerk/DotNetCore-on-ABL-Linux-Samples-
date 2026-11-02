@@ -330,3 +330,227 @@ certificate. Soften the slide from "always" to "needed for policy-dependent comm
 - **assemblies.xml needs only the simple name.** `<assembly name="System.IO.Compression.ZipFile"/>`
   — Version / Culture / PublicKeyToken are accepted but unnecessary.
 
+---
+
+## 6. P2 — facts that change slides
+
+### 6.1 The shipped runtimeconfig (slide 14)
+
+`$DLC/bin/Progress.clrbridge.netcore.runtimeconfig.json` as installed by OpenEdge 13.0 on Linux,
+verbatim and unedited:
+
+```json
+{
+  "runtimeOptions": {
+    "tfm": "net6.0",
+    "framework": {
+      "name": "Microsoft.NETCore.App",
+      "version": "6.0.0"
+    }
+  }
+}
+```
+
+- **tfm: `net6.0`** — not net8.0.
+- **No `Microsoft.WindowsDesktop.App`** entry (as expected on Linux).
+- File is dated 24 Jul 2025 while the rest of `bin/` is 23 Jan 2026: it looks carried forward
+  rather than refreshed for 13.0.
+
+The original is preserved at `~/src/runtimeconfig.ORIGINAL-13.0.json`. For the demos it was replaced
+with the same structure using `net8.0` / `8.0.0`. **Editing this file is a required install step**,
+not an optional tweak — OpenEdge ships neither .NET nor a config pointing at a supported version.
+
+Note the file is `root:root` but `$DLC/bin` is mode 0777 on this box, so the edit needed no `sudo`.
+On a properly locked-down installation it would.
+
+### 6.2 hello.p on Linux (slide 15)
+
+```
+OS:     Ubuntu 26.04.1 LTS
+FW:     .NET 8.0.33
+Arch:   X64
+```
+
+`ProcessArchitecture:ToString()` returns **`X64`**, confirming the slide. Windows output not
+captured: there is no OpenEdge installation on the Windows side of this PC (only a Windows .NET),
+and the brief forbids changing the Windows installation.
+
+### 6.3 hello-net.p (slide 9) — what the compiler rejects
+
+**Nothing.** Every line on slide 9 compiles and runs:
+
+```
+files in /data: 1
+Hello Linux
+list count: 2
+```
+
+Confirmed working: `Directory:GetFiles`, `NEW StringBuilder()`, the chained
+`oSb:Append("Hello"):Append(" Linux")`, a variable declared
+`AS "System.Collections.Generic.List<CHARACTER>"`, and `CATCH e AS System.Exception`.
+The generic type name must be **quoted**, both in `DEFINE VARIABLE` and in `NEW`.
+
+### 6.4 Missing -clrnetcore (slide 11 banner)
+
+```
+The -clrnetcore start-up parameter must be used to enable ABL access to .NET objects. (20829)
+** Could not understand line 4. (196)
+** Unknown Field or Variable name - RuntimeInformation. (201)
+** Unable to run startup procedure .../hello.p. (492)
+```
+
+The banner is right, and error **20829** names the parameter explicitly.
+
+### 6.5 Configured .NET version not installed
+
+With the stock `net6.0` config and only .NET 8/10 present — i.e. exactly what an attendee hits if
+they skip the runtimeconfig edit:
+
+```
+You must install or update .NET to run this application.
+
+App: /Progress/OpenEdge130_64/bin/_progres
+Architecture: x64
+Framework: 'Microsoft.NETCore.App', version '6.0.0' (x64)
+.NET location: /home/peter/.dotnet
+
+The following frameworks were found:
+  8.0.33 at [/home/peter/.dotnet/shared/Microsoft.NETCore.App]
+  10.0.14 at [/home/peter/.dotnet/shared/Microsoft.NETCore.App]
+
+Unable to load .NET. The runtimeconfig.json file contains a reference to a .NET framework
+which is not available: .../Progress.clrbridge.netcore.runtimeconfig.json. (20825)
+```
+
+Error **20825**. The message helpfully lists what *is* installed.
+
+### 6.6 Do framework assemblies need assemblies.xml entries?
+
+**It depends on the assembly, and the entry is simpler than expected.**
+
+Resolve with a **completely empty** `assemblies.xml` (they live in System.Runtime /
+System.Private.CoreLib): `Directory`, `File`, `StringBuilder`, `RuntimeInformation`, `Math`,
+`Convert`, `Encoding`, `List<T>`, `Task<T>`.
+
+Need an entry — without one you get `Could not find class or interface <type>. (12886)`:
+
+```xml
+<assembly name="System.IO.Compression"/>
+<assembly name="System.IO.Compression.ZipFile"/>
+<assembly name="System.Diagnostics.Process"/>
+<assembly name="System.Security.Cryptography"/>
+<assembly name="System.Security.Cryptography.X509Certificates"/>
+<assembly name="System.Text.RegularExpressions"/>
+```
+
+**The simple name is sufficient.** All three of these were tested and behave identically:
+
+```xml
+<assembly name="System.IO.Compression.ZipFile"/>
+<assembly name="System.IO.Compression.ZipFile, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"/>
+<assembly name="System.IO.Compression.ZipFile, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089"/>
+```
+
+No `assemblies.xsd` is shipped anywhere in `$DLC`, despite the `xsi:noNamespaceSchemaLocation` reference.
+
+### 6.7 OS-ERROR and exit codes
+
+`OS-ERROR` is **0** after every failing `OS-COMMAND` tested — a non-zero exit, a missing path and a
+missing binary alike (see §3). The only way to see the exit code is to have the shell report it
+(KB 000145783):
+
+```
+INPUT THROUGH VALUE("ls /data /nope > /dev/null 2>&1; echo $?").
+```
+
+With `System.Diagnostics.Process` the exit code is simply `oProc:ExitCode` — **2** in the demo.
+
+### 6.8 Is there a built-in zip/compression API in ABL 13.0?
+
+**No.** Slide 18's premise holds. There is no ABL statement or system handle for zip or deflate;
+`zip`/`unzip` via `OS-COMMAND` and `INPUT THROUGH` is the only route without .NET.
+
+### 6.9 X.509 specifics
+
+- **`NEW X509Certificate2(path)` loads a PEM file on Linux under .NET 8.** No conversion to PFX/DER
+  needed. (In .NET 9+ this constructor is obsolete in favour of `X509CertificateLoader`; on .NET 8
+  it is fine, which is another argument for staying on the certified 8.)
+- **`NotAfter` arrives as an ABL DATETIME** and works directly in `INTERVAL(...)`:
+  `INTERVAL(oCert:NotAfter, NOW, "days")` → `824`. It is **local time**; `sslc` prints GMT
+  (`16:09:56 GMT` vs `17:09:56` CET for the same certificate).
+- **`MESSAGE "valid:" oChain:Build(oCert)` compiles** and prints `yes`.
+- **ChainStatus needs a cast** — see D5.
+- Exact `ChainStatus` output for `stranger.pem`:
+  `PartialChain - unable to get local issuer certificate`
+  and for `expired.pem`: `NotTimeValid - certificate has expired`.
+- **`sslc version` on 13.0: `OpenSSL 3.5.2 5 Aug 2025`** (the distro `openssl` is 3.5.5).
+
+### 6.10 Span-based overloads (pitfalls slide) — confirmed
+
+```
+oRsa:ImportFromPem(STRING(cPem)).
+->
+Could not locate method 'ImportFromPem' with matching signature
+in class 'System.Security.Cryptography.RSA'. (14457)
+```
+
+`ImportFromPem` takes `ReadOnlySpan<char>`, and ABL cannot bind to it. **Error 14457.**
+
+This is specifically about spans, not about the class: non-span members of the very same `RSA`
+instance work fine (`oRsa:KeySize` → 2048, `oRsa:ExportParameters(FALSE)` → OK).
+
+Workaround: put the span-using call in a small C# facade and expose an ordinary `string`/`byte[]`
+signature to ABL — which is exactly the case for 08-facade.
+
+### 6.11 MESSAGE-DIGEST and ENCRYPT algorithms in 13.0 (slide 23)
+
+Tested, not taken from documentation:
+
+| MESSAGE-DIGEST | Result |
+|---|---|
+| CRC-32 | **not supported** |
+| MD5 | OK (16 bytes) |
+| SHA-1 | OK (20 bytes) |
+| SHA-256 | OK (32 bytes) |
+| **SHA-384** | **not supported** |
+| SHA-512 | OK (64 bytes) |
+| HMAC-SHA-1 / -256 / -512 | OK with the 3-argument form (data + key) |
+
+| SECURITY-POLICY:SYMMETRIC-ENCRYPTION-ALGORITHM | Result |
+|---|---|
+| DES, DES3, RC4 | **not supported** |
+| AES_CBC_128 / 192 / 256 | OK |
+| AES_ECB_128 / 256 | OK |
+| AES_GCM_256 | OK |
+
+Slide 23's list (SHA-256, SHA-512, HMAC, AES) is accurate. Two things worth adding:
+
+- **SHA-384 is missing from ABL but present in .NET** — a crisp one-line example of the gap.
+  `SHA384:Create():ComputeHash(...)` on "abc" returns 48 bytes,
+  `CB00753F45A35E8B…` (matches the published SHA-384 test vector).
+- DES/DES3/RC4 are gone, which is good news and worth saying out loud to a banking audience.
+
+### 6.12 -casesensitiveclasses (pitfalls slide)
+
+Not set in `$DLC/startup.pf`, so the installed default applies.
+
+**On Linux the question is largely moot, and the pitfall is worse than the slide suggests.** A class
+reference with the wrong capitalisation fails **regardless of the setting**:
+
+```
+DEFINE VARIABLE o AS CLASS fileprocessor NO-UNDO.   /* file is FileProcessor.cls */
+
+default                     -> Could not find class or interface fileprocessor. (12886)
+-casesensitiveclasses 1     -> Could not find class or interface fileprocessor. (12886)
+-casesensitiveclasses 0     -> Could not find class or interface fileprocessor. (12886)
+```
+
+The `.cls` lookup goes through a case-sensitive filesystem, so `-casesensitiveclasses 0` cannot
+rescue it. The same applies to .NET type names: `USING system.io.directory FROM ASSEMBLY` fails
+with 12886 under every setting.
+
+**This is the single most likely thing to bite a developer moving code from Windows to Linux**, and
+it is not a startup-parameter problem — it is a filesystem problem. Recommended slide wording:
+*"On Linux, class and type names must match exactly. `-casesensitiveclasses` does not change this:
+the filesystem decides."*
+

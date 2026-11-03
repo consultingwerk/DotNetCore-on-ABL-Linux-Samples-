@@ -1,0 +1,6 @@
+/* A: OS-COMMAND in a PASOE agent, no .NET used at all */
+DEFINE OUTPUT PARAMETER pcResult AS CHARACTER NO-UNDO.
+DEFINE VARIABLE i AS INTEGER NO-UNDO.
+ETIME(TRUE).
+DO i = 1 TO 5: OS-COMMAND SILENT VALUE("/bin/true"). END.
+pcResult = "5 x OS-COMMAND returned after " + STRING(ETIME) + " ms".

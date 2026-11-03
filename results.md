@@ -226,7 +226,7 @@ negative (`-2496`), which is a good second example if you have time on stage.
 
 ---
 
-## 5. Changes the deck needs (P1 findings so far)
+## 5. Changes the deck needs
 
 | # | Slide | Statement in the deck | What actually happens |
 |---|---|---|---|
@@ -239,6 +239,10 @@ negative (`-2496`), which is a good second example if you have time on stage.
 | D7 | Pitfalls | "Events: test first" | Tested: background-thread events **do not reach ABL** (15740), §8.2 |
 | D8 | Pitfalls | (new) | Regex in ABL strings: `{n}` and `\d` are silently rewritten, differently on Linux and Windows, §8.1 |
 | D9 | Pitfalls | `-casesensitiveclasses` | On Linux the filesystem decides; the parameter does not help, §6.12 |
+| D10 | Production / 20–22 | `Process` gives you an exit code | **Not in a PASOE agent**: `WaitForExit` never returns, children stay zombies, §8.4 |
+| D11 | Production | (new) | `Process:Start` avoids the KB 000207833 slowdown: flat vs ~6× for `OS-COMMAND` at 2 GB, §8.4 |
+| D12 | Production | (new) | One CLR per agent, but assemblies load per ABL session; framework state shared, §8.4 |
+| D13 | Production | (new) | PASOE 13.0 does not start on dash-based distros without a `setenv.sh` fix, §8.4 |
 
 ### D1 — slide 17 speaker note: recursion with the unnamed stream
 
@@ -870,19 +874,87 @@ the `ChainStatus` cast (D5), the Span overload (14457), the GMT/local-time misma
 UTC) — and leaves ABL with one call and a `JsonObject`. The cost is a build step and a DLL to
 deploy.
 
-### 8.4 06-pasoe — blocked
+### 8.4 06-pasoe — .NET in a PASOE agent
 
-`$DLC/servers/pasoe` is `root:root`, mode `0770`, so the demo user cannot read it:
+Full setup steps, all raw output and the test programs: `06-pasoe/README.md`. One instance
+(`~/pasoe/demo`), one agent, APSV transport, created and run as a normal user.
+
+**Setup findings (each cost time; all slide- or speaker-note-worthy):**
+
+- **`agentStartupParam` belongs in `[AppServer.SessMgr.<instance>]`**, set with `oeprop.sh`:
+  ```ini
+  [AppServer.SessMgr.demo]
+      agentStartupParam=-T "${catalina.base}/temp" -clrnetcore -assemblies /home/peter/src/DotNetCore-on-ABL-Linux-Samples-/assemblies
+  ```
+- **Without `DOTNET_ROOT` in the agent's environment** the client gets error **20825**, which
+  blames the runtimeconfig file although the file is correct. The batch client's extra .NET message
+  listing the frameworks it found does not appear under PASOE. Fix: `bin/dotnet_setenv.sh` in the
+  instance (every `*_setenv.sh` there is sourced at start-up).
+- **PASOE 13.0 does not start out of the box where `/bin/sh` is dash (Ubuntu, Debian):**
+  `setenv.sh: Bad substitution`. `$DLC/servers/pasoe/bin/setenv.sh` is a bash script sourced by the
+  `#!/bin/sh` `catalina.sh`; line 202 uses `${_trustfile:0:1}`. Fixed by an instance-local
+  `setenv.sh` with POSIX syntax; `$DLC` untouched. (Certified Linux distributions are RHEL-family,
+  where `/bin/sh` is bash — which is presumably why this has not surfaced.)
+- New instances have **all transports disabled** (`adapterEnabled=0`).
+- Non-root instance creation needs `PSC_AS_INSTANCE_DIR` and `CATALINA_TMPDIR`, because `pasman`
+  otherwise writes into `$DLC/servers/pasoe`.
+
+**Does one agent share one CLR across sessions? Yes for the CLR, no for your assemblies.**
 
 ```
-$ pasman create -v -f -p 8810 -P 8811 -s 8812 ~/pasoe/demo
-Pacific Application Server administration script could not be found.
-Script not found: /Progress/OpenEdge130_64/servers/pasoe/bin/tcman.sh
+connection 1 : session 6  AppDomain id 1  ALC 'AS-6'
+connection 2 : session 9  AppDomain id 1  ALC 'AS-9'
+connection 3 : session 4  AppDomain id 1  ALC 'AS-4'
 ```
 
-The licence does include the production AppServer (`Progress ProdAS for OE`), so this is a
-permissions problem only. `06-pasoe/README.md` documents the `agentStartupParam` line and the
-`DOTNET_ROOT` trap, unverified.
+One CLR and AppDomain per agent process, but **one AssemblyLoadContext per ABL session**. A static
+in our own assembly counted 1, 2 in each new session (and 7, 8 in a session that had served six
+earlier requests) — the same per-session behaviour as the ABL static used as control. Framework
+state *is* shared: `System.AppContext` data written in session 4 was read in session 9.
+Slide wording: *"One CLR per agent. Your assemblies load per session — a .NET static is no more
+shared than an ABL static. Framework state is shared by every session of the agent."*
+
+**Is `Process:Start` from an agent spared the KB 000207833 slowdown? Yes — but it has a worse problem.**
+
+100 × `/bin/echo`, agent grown by touching a MEMPTR, 3 runs per size:
+
+| Agent RSS | `OS-COMMAND` | `Process:Start` + `ReadToEnd` |
+|---:|---:|---:|
+| ~75 MB | 401 / 427 / 438 ms | 181 / 192 / 180 ms |
+| ~1.1 GB | 1503 / 1451 / 1516 ms | 161 / 164 / 169 ms |
+| ~2.1 GB | 2460 / 2697 / 2585 ms | 183 / 229 / 184 ms |
+
+KB 000207833 confirmed: `OS-COMMAND` gets ~6× slower at 2 GB; `Process:Start` stays flat.
+
+**But in a PASOE agent, .NET never sees a child process exit.** One request per freshly started
+agent, 30 s limit:
+
+| Test | PASOE agent | Batch client |
+|---|---|---|
+| `OS-COMMAND` ×5, no .NET | 9 ms | – |
+| touch `Process` class, then `OS-COMMAND` ×5 | 14 ms | – |
+| `Process:Start` + `WaitForExit()`, then `OS-COMMAND` | **hangs**, child `[true] <defunct>` | 14 ms |
+| touch `Process`, then `INPUT THROUGH` | 2 ms | – |
+| `Process:Start` + `WaitForExit()`, then `INPUT THROUGH` | **hangs**, zombie | 2 ms |
+| `Process:Start` + `WaitForExit(5000)` only | `returned no after 5003 ms; HasExited=no`, zombie | – |
+
+- `WaitForExit()` never returns; `WaitForExit(ms)` always times out; `HasExited` stays false; no
+  exit code. The same code works in a batch client.
+- `OS-COMMAND` and `INPUT THROUGH` are not affected.
+- A request stuck in `WaitForExit()` makes the agent **ignore `tcman.sh stop`** (SIGKILL needed).
+- Every child stays a **zombie** until the agent stops (900 after the timing runs; 0 after stop).
+  Zombies count against the per-user process limit (63,057 here) — an agent that started ~63,000
+  children without a restart would leave its user unable to start processes (inferred, not tested).
+- Supporting observation, not a proven cause: 11 of the agent's 12 threads block `SIGCHLD`.
+- What does work: redirect stdout and `ReadToEnd()` (EOF = child exited); that is how the timing
+  above was taken. You get the output, but not the exit code.
+
+**Consequence for the talk:** demo 2's `run-net.p` (`WaitForExit(5000)`, `Kill()`, `ExitCode`)
+works in the batch client on stage but **would not work in a PASOE agent**. The exit code — the
+main advertised win of `System.Diagnostics.Process` over `OS-COMMAND` — is exactly what an agent
+cannot get. Production slide: *"In PASOE, use `Process` for speed and stream capture, not for
+exit codes — and restart agents to clear zombies. Test this on your release before relying on
+it."*
 
 ---
 
@@ -893,9 +965,10 @@ permissions problem only. `06-pasoe/README.md` documents the `agentStartupParam`
    plausible, but the gap against 2023 is too large to present unexplained. Not yet investigated:
    whether the 2023 workload made fewer bridge calls per iteration, or whether `DECIMAL` ↔
    `System.Double` marshalling dominates. **Keep this row off the slide until resolved.**
-2. **PASOE not verified** — `$DLC/servers/pasoe` is root-only (0770), see §8.4. Unanswered: does
-   one agent share one CLR across sessions, and is `Process:Start` from an agent spared the
-   slowdown KB 000207833 reports for `OS-COMMAND`.
+2. **Why .NET cannot see child exits in a PASOE agent** (§8.4). Behaviour reproduced on fresh
+   agents; cause not proven (SIGCHLD blocked on 11 of 12 agent threads is the lead). Worth a
+   Progress support case before the talk mentions it as a defect — and worth checking on a
+   certified RHEL-family system, since this box is Ubuntu.
 3. **Why there is no 15740 message under `WAIT-FOR … PAUSE`** (§8.2) — observed 3/3, not explained.
 4. **Ubuntu 26.04 is not on the OpenEdge 13.0 Platform Compatibility Guide** (not checked against
    the guide itself). All numbers come from an uncertified distribution.

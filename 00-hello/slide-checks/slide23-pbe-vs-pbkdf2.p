@@ -1,0 +1,36 @@
+USING System.Security.Cryptography.Rfc2898DeriveBytes FROM ASSEMBLY.
+USING System.Security.Cryptography.HashAlgorithmName FROM ASSEMBLY.
+USING System.Text.Encoding FROM ASSEMBLY.
+USING System.Convert FROM ASSEMBLY.
+DEFINE VARIABLE rKey  AS RAW     NO-UNDO.
+DEFINE VARIABLE mPlain AS MEMPTR NO-UNDO.
+DEFINE VARIABLE mEnc  AS MEMPTR  NO-UNDO.
+DEFINE VARIABLE mDec  AS MEMPTR  NO-UNDO.
+DEFINE VARIABLE rSalt AS RAW     NO-UNDO.
+DEFINE VARIABLE rPbe  AS RAW     NO-UNDO.
+DEFINE VARIABLE aNet  AS "System.Byte[]" NO-UNDO.
+DEFINE VARIABLE aSalt AS "System.Byte[]" NO-UNDO.
+
+/* ---- GENERATE-PBE-KEY vs .NET PBKDF2 ---- */
+MESSAGE "PBE-HASH-ALGORITHM:" SECURITY-POLICY:PBE-HASH-ALGORITHM
+        " PBE-KEY-ROUNDS:" SECURITY-POLICY:PBE-KEY-ROUNDS.
+rSalt = HEX-DECODE("0102030405060708").
+rPbe  = GENERATE-PBE-KEY("secret", rSalt).
+DEFINE VARIABLE cAbl AS CHARACTER NO-UNDO.
+DEFINE VARIABLE cNet AS CHARACTER NO-UNDO.
+cAbl = STRING(HEX-ENCODE(rPbe)).
+MESSAGE "ABL GENERATE-PBE-KEY :" LENGTH(rPbe, "RAW") "bytes" cAbl.
+aSalt = Convert:FromHexString("0102030405060708").
+aNet = Rfc2898DeriveBytes:Pbkdf2(Encoding:UTF8:GetBytes("secret"), aSalt,
+         SECURITY-POLICY:PBE-KEY-ROUNDS,
+         (IF SECURITY-POLICY:PBE-HASH-ALGORITHM = "SHA-256" THEN HashAlgorithmName:SHA256
+          ELSE IF SECURITY-POLICY:PBE-HASH-ALGORITHM = "SHA-512" THEN HashAlgorithmName:SHA512
+          ELSE IF SECURITY-POLICY:PBE-HASH-ALGORITHM = "MD5" THEN HashAlgorithmName:MD5
+          ELSE HashAlgorithmName:SHA1),
+         LENGTH(rPbe, "RAW")).
+cNet = LC(Convert:ToHexString(aNet)).
+MESSAGE ".NET Pbkdf2 same in  :" aNet:Length "bytes" cNet.
+MESSAGE "identical:" (cAbl = cNet).
+CATCH e AS Progress.Lang.Error:
+  MESSAGE "FAILED:" e:GetMessage(1).
+END CATCH.

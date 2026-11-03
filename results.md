@@ -228,6 +228,40 @@ negative (`-2496`), which is a good second example if you have time on stage.
 
 ## 5. Changes the deck needs
 
+### 5.0 Checked against draft 6 (deck saved 03.11.2026 09:18) — what is still open
+
+Draft 6 already carries D1–D6, D9 and D14 and the P1–P3 numbers. Still open, most important
+first (slide numbers = draft 6):
+
+| Slide | What it says now | Change |
+|---|---|---|
+| 21 banner | "Process.Start fixes the exit code, the timeout and the quoting. Not the cost of spawning." | **Wrong on both halves in PASOE.** Spawn cost: `Process:Start` stays flat (~185 ms / 100 starts at 75 MB and at 2 GB) while `OS-COMMAND` goes 420 → 2580 ms (§8.4). Exit code / timeout: in an agent `WaitForExit` never sees the child exit. Suggest: *"Process.Start avoids the fork slowdown and the shell. In PASOE it cannot see the exit code."* Notes: "Still open … (not measured)" → measured. |
+| 20, 35 | ".NET: exit code, stdout, stderr, timeout"; table row "Run external processes → Exit code, stderr, timeout" | True for batch and character clients only. Add "(not in PASOE)" or a footnote (§8.4). |
+| 32 | `agentStartupParam=…`; notes "TODO verify: exact section … statics shared?" | Section is `[AppServer.SessMgr.<abl-app>]`, set with `oeprop.sh`. Add a line: **the agent needs `DOTNET_ROOT`** — without it the client gets 20825 blaming the runtimeconfig. Notes: one CLR per agent, assemblies loaded per ABL session (own AssemblyLoadContext `AS-<n>`), framework state shared (§8.4). `-preloadCLR` was not tested in an agent. |
+| 34 card "Events: test first" | "Same syntax; delivery without a GUI WAIT-FOR untested" | Tested: **not delivered.** FileSystemWatcher and Process.Exited fail with 15740 ("The ABL cannot be called on a thread other than the main thread"); under `WAIT-FOR … PAUSE` silently. Suggest: *"Events: background-thread events don't arrive (15740). Poll instead."* (§8.2) |
+| 34 card "Span-based overloads" | "Pick the string or byte[] overload" | `RSA.ImportFromPem` has **no** string overload — only `ReadOnlySpan<char>` (C# converts strings silently, ABL cannot). Suggest: *"Some APIs are Span-only: wrap them in C#."* The facade does it (`Certs.RsaKeySizeFromPem` → 2048, §8.3). |
+| 23 | ".NET adds … AES-GCM authenticated encryption" | **ABL has it.** `ENCRYPT(m, key, iv, "AES_GCM_256", mTag)` with a MEMPTR tag (16 bytes) round-trips; a tampered ciphertext gives `DECRYPT error (14272)`. Move AES-GCM to the ABL column. PBKDF2 can stay under .NET: `GENERATE-PBE-KEY` (SHA-1, 1000 rounds, same salt) does **not** match PBKDF2-HMAC-SHA1 (`9025c84d…` vs `4bedfd8a…`), so ABL cannot verify PBKDF2 hashes made elsewhere. |
+| 30 "Distance" | "~6 crossings per call" (notes: Sin, Cos, Atan2, Sqrt, PI) | **13 crossings**: PI ×4 (inside deg2rad), Sin ×4, Cos ×2, Sqrt ×2, Atan2 ×1. Better text for the column: *"13 crossings; as one C# call 14× faster"* (§7.6). |
+| 30 "CLR start" | "~130" | Same box measured 130 ms one evening and 214 ms the next morning. Show *"0.1–0.2 s"*. |
+| 37 | repo URL + QR; notes: "only contains the LICENSE" | **`main` still only has the LICENSE.** Everything is on branch `pug2026-demos`. Merge it before the talk or the QR code opens an empty repo. |
+| 26 notes | "TODO verify id behaviour in WSL (tzdata installed?)"; "only ~, { and \ need escaping" | Verified: `Europe/Amsterdam` resolves, +1 h January / +2 h July. Escaping: `{2}` is **silently** replaced by "" (include argument), and `\` is an escape only on UNIX — the same pattern gives a different regex on Linux and Windows, no error (§8.1). Strong candidate for a Pitfalls card. |
+| 28, 30 notes | ".NET 10 not run" | It was run (uncertified): bridge-heavy rows ~20 % faster (Guid.Parse 1292, SHA-256 915, Distance 25,630), bulk rows unchanged, no conclusion changes (§7.1). Your call whether it goes on a slide. |
+| 8 notes | "Whether events are delivered … untested" | Tested, see slide 34 row. |
+| 9 notes | "DRAFT code, to be compiled … before the talk" | Remove. The slide code exactly as printed (incl. 2-argument `GetFiles`, `oSb:Length`, wildcard USINGs) runs: `11 Hello Linux`. |
+| 19 notes | Prerequisites: "/data/in"; RUN: "/tmp/data/tree" | Pick one; both trees exist. `/data/tree` reads better on screen. |
+
+Production facts not yet anywhere in the deck (speaker notes at least):
+- PASOE 13.0 does not start on dash-based distros (Ubuntu, Debian) without a fix to `setenv.sh` (§8.4).
+- A request stuck in `WaitForExit` makes the agent ignore `tcman.sh stop`; every `Process:Start`
+  child stays a zombie until the agent stops (§8.4).
+
+Code on the slides vs the repo (the brief asked to report every difference): slide 17's ABL box
+(`DO WHILE CAN-FIND` + `DELETE ttDir`) and slides 20/22 (`ArgumentList`, `git status`) differ from
+the repo programs. The slide versions were run as printed and work; the repo programs still use
+the older shapes and need aligning (repo work, no deck change).
+
+### 5.1 Original findings (D1–D14)
+
 | # | Slide | Statement in the deck | What actually happens |
 |---|---|---|---|
 | D1 | 17 (note) | Recursion with the unnamed stream breaks | **False on 13.0.** See below. |

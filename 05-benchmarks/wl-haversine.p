@@ -2,7 +2,8 @@
     File        : wl-haversine.p
     Purpose     : Workload "haversine" - repeat of Mike Fechner's 2023 benchmark
                   GetDistanceFromLatLonInKm (2.4 s on .NET Framework 4.8,
-                  1.9 s on .NET 6, OpenEdge 12.7 on Windows).
+                  1.9 s on .NET 6, OpenEdge 12.7 on Windows - for 10,000
+                  iterations, not the 500,000 run here; see README).
                   ABL has no SIN, COS, ATAN2, SQRT or PI, so System.Math is used.
                   Distance between Progress HQ (Burlington, MA) and
                   Consultingwerk HQ (Cologne).

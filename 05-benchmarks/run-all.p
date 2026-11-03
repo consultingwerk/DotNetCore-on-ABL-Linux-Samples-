@@ -33,7 +33,7 @@ define temp-table ttRun no-undo
     field Variant  as character
     field RunNo    as integer
     field Ms       as int64
-    field Check    as character
+    field CheckValue as character
     index ixRun Workload Variant Ms.
 
 define variable cLabel   as character no-undo initial "default".
@@ -96,7 +96,7 @@ for each ttWorkload by ttWorkload.Seq:
                ttRun.Variant  = ttWorkload.Variant
                ttRun.RunNo    = iRun
                ttRun.Ms       = iMs
-               ttRun.Check    = cCheck.
+               ttRun.CheckValue    = cCheck.
 
         export stream sCsv delimiter ","
             cLabel ttWorkload.Workload ttWorkload.Variant ttWorkload.Iterations iRun iMs cCheck.
@@ -127,7 +127,7 @@ for each ttWorkload by ttWorkload.Seq:
             put stream sMd unformatted
                 substitute("| &1 | &2 | &3 | &4 | &5 | &6 |",
                            ttWorkload.Workload, ttWorkload.Variant, ttWorkload.Iterations,
-                           ttRun.Ms, iRuns, ttRun.Check) skip.
+                           ttRun.Ms, iRuns, ttRun.CheckValue) skip.
     end.
 end.
 

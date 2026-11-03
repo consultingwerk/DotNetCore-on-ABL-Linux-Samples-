@@ -18,9 +18,12 @@ define variable cLine as character no-undo.
 define stream sProc.
 
 os-delete value(cZip).
-os-command silent value(substitute("cd &1 && zip -q -r &2 .", quoter(pcArg), quoter(cZip))).
+/* NOTE: do NOT build this with SUBSTITUTE. SUBSTITUTE treats "&" as its
+   placeholder marker and collapses "&&" to "&", which backgrounds the cd and
+   runs zip in the CURRENT directory instead of pcArg. Plain concatenation. */
+os-command silent value("cd " + quoter(pcArg) + " && zip -q -r " + quoter(cZip) + " .").
 
-input stream sProc through value(substitute("unzip -Z1 &1 | grep -v '/$' | wc -l", quoter(cZip))).
+input stream sProc through value("unzip -Z1 " + quoter(cZip) + " | grep -v '/$' | wc -l").
 repeat:
     import stream sProc unformatted cLine.
     pcCheck = trim(cLine).

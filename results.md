@@ -467,8 +467,37 @@ With `System.Diagnostics.Process` the exit code is simply `oProc:ExitCode` — *
 
 ### 6.8 Is there a built-in zip/compression API in ABL 13.0?
 
-**No.** Slide 18's premise holds. There is no ABL statement or system handle for zip or deflate;
-`zip`/`unzip` via `OS-COMMAND` and `INPUT THROUGH` is the only route without .NET.
+**Not in OpenEdge itself** — there is no ABL statement, system handle or shipped class for zip or
+deflate in 13.0. So slide 18's premise holds *for the product*.
+
+**But "ABL cannot do zip" is too strong, and the deck must not say it.** The SmartComponent Library
+has a **pure ABL** implementation in `Consultingwerk/Framework/Compression/`:
+
+```
+Crc32.cls   Deflater.cls   Inflater.cls
+ZipArchiveReader.cls   ZipArchiveWriter.cls   ZipEntry.cls   ZipFormat.cls
+ZipCompressionMethodEnum.cls   Exceptions/...
+```
+
+(SCL-6170, Mike Fechner, created 28.10.2026 — new enough that it may post-date the deck draft.)
+
+Its own class comment is the most useful thing here, because it makes the talk's argument
+independently:
+
+> *"Pure ABL implementation without .NET, so it can be used on every platform (including PASOE on
+> Linux). […] Being implemented in ABL, the writer is considerably slower than native ZIP
+> implementations. Applications that need performance integrate a platform specific solution
+> (e.g. System.IO.Compression in the GUI client, OS tools or native libraries on the server)."*
+
+It also documents real limits: intended for small files (a few MB), no Zip64, so no archives over
+4 GB and no more than 65,535 entries.
+
+**Recommended reframing of slide 18.** Rather than "ABL has no zip", say: zip in ABL means either
+shelling out to `zip`/`unzip` (no API, parse the output) or a pure-ABL implementation such as the
+SmartComponent Library's — which works everywhere but is explicitly documented as slower and
+capped at small archives. `System.IO.Compression` gives you a maintained, Zip64-capable,
+native-speed implementation for free. Saying this *strengthens* the case and pre-empts the
+obvious objection from the room — especially given the implementation is Consultingwerk's own.
 
 ### 6.9 X.509 specifics
 
@@ -554,3 +583,187 @@ it is not a startup-parameter problem — it is a filesystem problem. Recommende
 *"On Linux, class and type names must match exactly. `-casesensitiveclasses` does not change this:
 the filesystem decides."*
 
+---
+
+## 7. P3 — the benchmarks (slides 28–30)
+
+Method as written in `05-benchmarks/README.md`: one warm-up run, then 5 timed runs, median
+reported. Same machine, nothing else running, test tree `/data/tree` (10,000 files) on the Linux
+filesystem — never `/mnt/c`. Workloads and iteration counts unchanged from the draft.
+**Two bugs had to be fixed first — see §7.4; one of them was measuring the wrong thing entirely.**
+
+### 7.1 The Numbers (ms, median of 5)
+
+| Workload | ABL | .NET 8 | .NET 10 ¹ |
+|---|---:|---:|---:|
+| Guid.Parse, 500,000 calls | – | 1668 | 1292 |
+| Distance (Haversine), 500,000 calls | – | 29818 ² | 25630 ² |
+| SHA-256, 100,000 strings | **56** | 1161 | 915 |
+| Directory walk, 10,000 files | 23 | **4** | **5** |
+| 100 process starts | 221 | 224 | 209 |
+| Zip, 10,000 files | shell: **130** · SCL pure ABL: 97060 ³ | 171 | 166 |
+| First .NET call (CLR start) | – | ~120–215 ⁴ | ~190 ⁴ |
+
+¹ **.NET 10: not certified for OpenEdge 13.0.** Experiment only. Runtimeconfig backed up,
+switched to `net10.0`, restored to `net8.0` afterwards (verified: `hello.p` reports `.NET 8.0.33`).
+² Do not put on a slide yet — ~15× slower than Mike Fechner's 2023 figure, see Open problems.
+³ Median of 5. Run 4 is invalid — the PC went to sleep during it (54,801,453 ms ≈ 15 h). The four
+valid runs were 96,560 / 96,897 / 97,060 / 105,815 ms; the median is unaffected by the outlier.
+⁴ Wall-clock of a whole session minus a session that makes no .NET call. Depends heavily on
+machine state: .NET 8 measured 130 ms one evening and 214 ms the next morning on the same box.
+Same-day comparison (03.11.): .NET 8 235 − 21 = **214 ms**, .NET 10 213 − 23 = **190 ms**.
+Treat as "0.1–0.2 s, once per session"; .NET 8 and 10 do not differ meaningfully.
+
+**The ABL rows are the control.** The .NET 8 suite ran on the evening of 02.11., the .NET 10
+suite on the morning of 03.11. The ABL-side numbers barely moved between them (SHA-256 56 → 57,
+dirwalk 23 → 23, shell zip 130 → 138, process 221 → 239), so the .NET 8 vs .NET 10 differences
+are not machine drift.
+
+### What .NET 10 changes
+
+- **Bridge-heavy workloads get ~20 % faster**: Guid.Parse −23 %, SHA-256 −21 %, Haversine −14 %.
+  The per-call cost of crossing into .NET drops; the CLR itself did not get slower to start.
+- **Bulk workloads do not change**: dirwalk, process, zip are within noise. They spend their time
+  in the OS, not in the bridge.
+- **None of it changes a single conclusion.** ABL still wins SHA-256 by 16×, the shell still
+  matches .NET on zip, and process starts are still a dead heat. That is the useful message for a
+  conservative audience: *stay on certified .NET 8; 10 is faster but not different*.
+
+Check values, which prove both sides did the same work:
+
+| Workload | Check value | ABL | .NET |
+|---|---|:-:|:-:|
+| sha256 | `12daeeea9fc134ad4ecd9ba331035035158bbbdfbca5e84d6c5c7ca7737ed253` | ✔ | ✔ |
+| dirwalk | `10000` files | ✔ | ✔ |
+| process | `100` successful starts | ✔ | ✔ |
+| zip | `10000` entries (all three variants) | ✔ | ✔ |
+| guid-parse | `5f8e2c1a-3b4d-4e6f-8a9b-0c1d2e3f4a5b` | – | ✔ |
+| haversine | `5747` km | – | ✔ |
+
+### 7.2 One line per row
+
+- **Guid.Parse, 1668 ms / 500,000** — ~3.3 µs per call. This is almost entirely *bridge* cost, not
+  parsing: it is the price of crossing from ABL into .NET half a million times. ABL has no GUID
+  parsing to compare against, so read it as "what a tiny .NET call costs", not as a win.
+- **Haversine, 29818 ms / 500,000** — ~60 µs per iteration, about 6 bridge crossings each
+  (`Sin`, `Cos`, `Atan2`, `Sqrt`, `PI`). Mike Fechner measured ~1.9 s for the same workload on
+  Windows/.NET 6 in 2023, so **this is ~15× slower and the gap needs explaining before it goes on
+  a slide** — see "Open problems". ABL has no trigonometry at all, so there is still no ABL column.
+- **SHA-256, ABL 56 ms vs .NET 1161 ms — ABL wins by 20×.** `MESSAGE-DIGEST` is native ABL;
+  the .NET path crosses the bridge twice per string (encode, hash) — 200,000 crossings.
+  **If you only show one number that complicates the story, show this one.**
+- **Directory walk, ABL 23 ms vs .NET 4 ms — .NET wins by ~6×.** One `Directory:GetFiles` call
+  returns 10,000 paths across a single bridge crossing; the ABL queue walker makes an `OS-DIR`
+  round trip per directory.
+- **100 process starts, 221 vs 224 ms — a dead heat.** Process creation is dominated by the OS
+  `fork`/`exec`, not by who asked for it. The .NET win here is not speed, it is *control*:
+  separated stdout/stderr, a real exit code and a timeout (demo 2).
+- **Zip, shell 130 ms vs .NET 171 ms vs SCL pure ABL ~95 s.** See §7.3 — this row needs care.
+- **CLR start ~130 ms, paid once per session.** See §7.5.
+
+### 7.3 The zip row, honestly
+
+Three implementations, same tree, same check value (10,000 entries):
+
+| Variant | 10,000 files | 500 files / 2 MB |
+|---|---:|---:|
+| `zip` via OS-COMMAND | 130 ms | 42 ms |
+| `System.IO.Compression` | 171 ms | 27 ms |
+| **SCL `ZipArchiveWriter` (pure ABL)** | **~95,400 ms** | **~31,000 ms** |
+
+- **The shell is not slower than .NET.** On the big tree `zip` actually beats
+  `ZipFile:CreateFromDirectory`. So "zip is faster in .NET" is **not** a claim the deck can make.
+  The .NET argument for zip is *API*, not speed: no shell, no output parsing, no quoting, a real
+  object model, Zip64, and errors as exceptions instead of exit codes you cannot see (§3).
+- **The pure-ABL implementation is ~560× slower than .NET on the large tree and ~1,100× slower on
+  the small one.** The small tree is 2 MB of base64 random data, i.e. ~65 KB/s for SCL against
+  ~74 MB/s for .NET. This is *expected and fair*: ABL has no byte-level primitives, so a Deflate
+  written in ABL pays for every byte in interpreted code.
+- **This is inside SCL's documented envelope for the 500-file case** (a few MB), so it is not a
+  strawman. SCL's own class comment predicts it: *"the writer is considerably slower than native
+  ZIP implementations. Applications that need performance integrate a platform specific
+  solution (e.g. System.IO.Compression …)."*
+- **Fair framing for the slide:** SCL's writer exists for *portability* — it runs anywhere,
+  including PASOE on Linux with no .NET at all — not for throughput. The honest headline is
+  "you can do zip in pure ABL, and for configuration exports and attachments you should; for
+  10,000 files you want the native implementation."
+
+### 7.4 What had to be fixed before any number was trustworthy
+
+The benchmark code had never been compiled. Full detail in `05-benchmarks/README.md`; the short
+version, because one of these is a methodology story worth telling on stage:
+
+1. **`run-all.p`: `Check` is a reserved word.** `field Check as character` does not compile
+   (errors 247 / 267 / 725). Renamed to `CheckValue`.
+
+2. **`wl-zip-shell.p`: `SUBSTITUTE` collapsed `&&` into a single `&`.**
+
+   ```
+   substitute("cd &1 && zip -q -r &2 .", quoter(pcArg), quoter(cZip))
+   ```
+
+   `SUBSTITUTE` treats `&` as its placeholder marker, so the command executed was:
+
+   ```
+   cd "/data/tree" & zip -q -r "/tmp/bench-shell.zip" .
+   ```
+
+   That **backgrounds the `cd`** and runs `zip` in the *current* directory. The workload archived
+   the `05-benchmarks` folder — 19 files — and compared it against the .NET side's 10,000.
+
+   **The check values caught it.** The row read `19` against `10000`, which is impossible to miss.
+   Without them the slide would have carried "ABL zip is ~20× faster than .NET", measured on 19
+   files against 10,000, and it would have looked entirely plausible.
+
+   Fixed with plain concatenation. **Never build a shell command containing `&&` with
+   `SUBSTITUTE`.** This is worth a line on "How We'll Measure": the check values earned their
+   keep on the first real run.
+
+### 7.5 CLR start-up, measured properly
+
+The draft's `clr-first-call.p` reports 4–7 ms for the first `NEW System.Object()`, which is
+misleading: by the time it runs, compiling a program containing `USING … FROM ASSEMBLY` has
+already loaded the CLR. The cost is real but is paid earlier in the session.
+
+Measured instead as **total session wall-clock**, 5 runs each, `date +%s%N` around `_progres`:
+
+| Session | Mean wall-clock |
+|---|---:|
+| plain ABL, no `-clrnetcore` | 13 ms |
+| `-clrnetcore`, no .NET call made | **13 ms** |
+| `-clrnetcore` + one `NEW System.Object()` | **143 ms** |
+| `-clrnetcore -preloadCLR` + one `NEW System.Object()` | 132 ms |
+
+(Evening of 02.11. Repeated the next morning: 21 / 235 / 214 ms for .NET 8, 23 / 213 / 231 ms
+for .NET 10. Absolute values move with machine state; the pattern does not.)
+
+Three conclusions, all slide-worthy:
+
+- **`-clrnetcore` costs nothing on its own.** A session that never touches .NET is as fast as one
+  started without the flag. The CLR is loaded lazily, on first use. You can put `-clrnetcore` in
+  a shared startup file without taxing sessions that do not use it.
+- **The first .NET call costs ~130 ms**, once per session. For a batch job or a PASOE agent that
+  is irrelevant; for a short-lived script invoked in a loop it dominates everything else.
+- **`-preloadCLR` barely helps in a batch session** (132 vs 143 ms, within noise of each other).
+  It moves the cost to session start rather than removing it. If the deck implies `-preloadCLR` is
+  a fix for CLR start-up cost, soften that.
+
+
+---
+
+## 8. Open problems
+
+1. **Haversine is ~15× slower than Mike Fechner's 2023 figure** (29.8 s on .NET 8 vs ~1.9 s on
+   Windows/.NET 6). ~6 bridge crossings × 500,000 iterations at ~10 µs each makes the arithmetic
+   plausible, but the gap against 2023 is too large to present unexplained. Not yet investigated:
+   whether the 2023 workload made fewer bridge calls per iteration, or whether `DECIMAL` ↔
+   `System.Double` marshalling dominates. **Keep this row off the slide until resolved.**
+2. **PASOE not verified.** `06-pasoe/README.md` documents the `agentStartupParam` setting and the
+   `DOTNET_ROOT` trap, but no instance was created, so the shared-CLR and `Process:Start`-vs-
+   `OS-COMMAND`-in-an-agent questions are unanswered.
+3. **04-more and 09-events written but not yet run** (held back so they would not disturb the
+   benchmark timings).
+4. **08-facade not started.** Needs the .NET 8 SDK, which is not installed.
+5. **Ubuntu 26.04 is not on the OpenEdge 13.0 Platform Compatibility Guide** (not checked against
+   the guide itself). All numbers come from an uncertified distribution.
+6. **Screenshots are SVG, not PNG** — no ImageMagick or PIL on the box.

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Assemblies the ABL compiler must be told about.
+     Types in System.Runtime / System.Private.CoreLib (Directory, File, StringBuilder,
+     RuntimeInformation, Math, ...) resolve WITHOUT an entry here. Everything else needs one.
+     The simple assembly name is sufficient on OpenEdge 13.0 / .NET 8 -
+     Version / Culture / PublicKeyToken are accepted but not required. -->
+<references xsi:noNamespaceSchemaLocation="assemblies.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <assembly name="System.IO.Compression"/>
+  <assembly name="System.IO.Compression.ZipFile"/>
+  <assembly name="System.Diagnostics.Process"/>
+  <assembly name="System.Security.Cryptography"/>
+  <assembly name="System.Security.Cryptography.X509Certificates"/>
+  <assembly name="System.Text.RegularExpressions"/>
+  <!-- our own facade, built from 08-facade; the DLL sits next to this file -->
+  <assembly name="Demo.Interop"/>
+</references>

@@ -17,7 +17,7 @@ The only numbers so far are Mike Fechner's, from ".NET Core and OpenEdge" (PUG C
 | Platform | Windows | Linux (WSL) |
 | Compared | .NET Framework 4.8 vs .NET 6 | ABL vs .NET 8 (and .NET 10) |
 | Guid.Parse, 500,000 calls | ~6 s → ~5 s | `wl-guid-parse.p` |
-| Distance (Haversine) | 2.4 s → 1.9 s | `wl-haversine.p` |
+| Distance (Haversine) | 2.4 s → 1.9 s **for 10,000 iterations** (not 500,000 — see below) | `wl-haversine.p` |
 
 Three years, a new OpenEdge major, a different OS, two newer .NET LTS releases, and a different question: when does .NET beat plain ABL, and what does the bridge cost?
 
@@ -149,3 +149,12 @@ A third zip variant was added at Peter's request: the SmartComponent Library's *
 genuine ABL implementation instead of only a shell-out. It needs the SCL ABL tree on PROPATH.
 SCL documents the writer as intended for small archives (a few MB, no Zip64), so the 10,000-file
 tree is deliberately outside its design envelope; the README table reports it as such.
+
+### Correction: the 2023 Haversine figures were for 10,000 iterations
+
+The table at the top originally implied 2.4 s / 1.9 s for 500,000 iterations. The 2023 deck
+(slides 54 and 71) shows `DO i = 1 TO 10000`. `wl-haversine.p` still runs 500,000 iterations
+(unchanged); for a like-for-like comparison run `haversine-analysis.p -param 10000`
+(550 ms on OE 13.0 / .NET 8 / Linux vs 1921 ms on OE 12.7 / .NET 6 / Windows in 2023).
+`haversine-analysis.p` also splits the cost into bridge and ABL parts; it is not part of
+`run-all.p`.

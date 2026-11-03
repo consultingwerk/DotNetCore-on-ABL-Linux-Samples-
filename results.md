@@ -243,6 +243,7 @@ negative (`-2496`), which is a good second example if you have time on stage.
 | D11 | Production | (new) | `Process:Start` avoids the KB 000207833 slowdown: flat vs ~6× for `OS-COMMAND` at 2 GB, §8.4 |
 | D12 | Production | (new) | One CLR per agent, but assemblies load per ABL session; framework state shared, §8.4 |
 | D13 | Production | (new) | PASOE 13.0 does not start on dash-based distros without a `setenv.sh` fix, §8.4 |
+| D14 | 29 "Why Measure Again?" | Haversine 2023: 2.4 s → 1.9 s for 500,000 | Those were **10,000** iterations; same code now 550 ms, ~3.5× faster, §7.6 |
 
 ### D1 — slide 17 speaker note: recursion with the unnamed stream
 
@@ -604,7 +605,7 @@ filesystem — never `/mnt/c`. Workloads and iteration counts unchanged from the
 | Workload | ABL | .NET 8 | .NET 10 ¹ |
 |---|---:|---:|---:|
 | Guid.Parse, 500,000 calls | – | 1668 | 1292 |
-| Distance (Haversine), 500,000 calls | – | 29818 ² | 25630 ² |
+| Distance (Haversine), 500,000 calls | – | 29818 ² | 25630 |
 | SHA-256, 100,000 strings | **56** | 1161 | 915 |
 | Directory walk, 10,000 files | 23 | **4** | **5** |
 | 100 process starts | 221 | 224 | 209 |
@@ -613,7 +614,8 @@ filesystem — never `/mnt/c`. Workloads and iteration counts unchanged from the
 
 ¹ **.NET 10: not certified for OpenEdge 13.0.** Experiment only. Runtimeconfig backed up,
 switched to `net10.0`, restored to `net8.0` afterwards (verified: `hello.p` reports `.NET 8.0.33`).
-² Do not put on a slide yet — ~15× slower than Mike Fechner's 2023 figure, see Open problems.
+² Safe to use. The apparent "15× slower than 2023" was a mistake in the draft README: the 2023
+run was 10,000 iterations, not 500,000. Per iteration it is ~3.5× *faster* now — see §7.6.
 ³ Median of 5. Run 4 is invalid — the PC went to sleep during it (54,801,453 ms ≈ 15 h). The four
 valid runs were 96,560 / 96,897 / 97,060 / 105,815 ms; the median is unaffected by the outlier.
 ⁴ Wall-clock of a whole session minus a session that makes no .NET call. Depends heavily on
@@ -652,10 +654,10 @@ Check values, which prove both sides did the same work:
 - **Guid.Parse, 1668 ms / 500,000** — ~3.3 µs per call. This is almost entirely *bridge* cost, not
   parsing: it is the price of crossing from ABL into .NET half a million times. ABL has no GUID
   parsing to compare against, so read it as "what a tiny .NET call costs", not as a win.
-- **Haversine, 29818 ms / 500,000** — ~60 µs per iteration, about 6 bridge crossings each
-  (`Sin`, `Cos`, `Atan2`, `Sqrt`, `PI`). Mike Fechner measured ~1.9 s for the same workload on
-  Windows/.NET 6 in 2023, so **this is ~15× slower and the gap needs explaining before it goes on
-  a slide** — see "Open problems". ABL has no trigonometry at all, so there is still no ABL column.
+- **Haversine, 29818 ms / 500,000** — ~60 µs per distance, of which ~41 µs is 13 bridge
+  crossings at ~3.2 µs each and ~15 µs is ABL function-call and DECIMAL arithmetic (§7.6). ABL
+  has no trigonometry, so there is no ABL column. The same formula as **one** call into a C#
+  method takes 3.9 µs — 14× faster.
 - **SHA-256, ABL 56 ms vs .NET 1161 ms — ABL wins by 20×.** `MESSAGE-DIGEST` is native ABL;
   the .NET path crosses the bridge twice per string (encode, hash) — 200,000 crossings.
   **If you only show one number that complicates the story, show this one.**
@@ -755,6 +757,57 @@ Three conclusions, all slide-worthy:
   It moves the cost to session start rather than removing it. If the deck implies `-preloadCLR` is
   a fix for CLR start-up cost, soften that.
 
+
+### 7.6 The Haversine row, explained
+
+The draft README compared the 500,000-iteration result with Mike Fechner's 2023 figures
+(2.4 s → 1.9 s) and it looked ~15× *slower*. The 2023 deck (`2023 .Net Core/.NET Core with
+OpenEdge.pptx`, slides 54 and 71) shows the actual 2023 code and run:
+
+```
+DO i = 1 TO 10000:
+   ASSIGN deDistance = getDistanceFromLatLonInKm (50.9692156, 7.0129187,   /* Consultingwerk HQ */
+                                                  42.4848118, -71.1934179 /* Progress Software HQ */).
+END.
+MESSAGE ETIME .
+```
+
+```
+_progres -b -p distance.p                  -> 2402   (.NET Framework 4.8)
+_progres -b -p distance.p -clrnetcore      -> 1921   (.NET 6)
+```
+
+**10,000 iterations, not 500,000.** The function is the same shape as `wl-haversine.p`
+(13 .NET calls per distance). Same loop, 10,000 iterations, on this box
+(`05-benchmarks/haversine-analysis.p`, median of 5):
+
+| | 10,000 distances | per distance |
+|---|---:|---:|
+| 2023: OE 12.7, .NET Framework 4.8, Windows | 2402 ms | 240 µs |
+| 2023: OE 12.7, .NET 6, Windows | 1921 ms | 192 µs |
+| 2026: OE 13.0, .NET 8, Linux (WSL) | **550 ms** | **55 µs** |
+
+About **3.5× faster** — consistent with Guid.Parse, which went from ~5 s to 1.7 s for 500,000
+calls (~3×). Machine, OS and OpenEdge release all changed, so present it as "the same code three
+years later", not as a pure .NET 6 → 8 gain.
+
+**Where the 55 µs go** (100,000 distances, median of 5):
+
+| Variant | µs / distance |
+|---|---:|
+| V1 as benchmarked — 13 .NET calls | 56.1 |
+| V2 `Math:PI` read once — 9 .NET calls | 43.1 |
+| V3 identical ABL code, no .NET (stand-ins) | 14.8 |
+| V4 one call into `Demo.Interop.Geo.DistanceKm` (C#) | **3.9** |
+
+- One bridge crossing costs **~3.2 µs**: (56.1 − 14.8) / 13 from V1/V3, 13 µs / 4 calls from V1/V2,
+  and 3.3 µs per call from Guid.Parse. Three independent measurements agree.
+- **The bridge, not the maths, is the cost.** 75 % of V1 is crossing into .NET.
+- **Cross once, not thirteen times:** moving the whole formula into a C# method is **14× faster**
+  than calling `System.Math` from ABL, and even ~4× faster than the ABL function calls alone (V3).
+  Same check value (5747 km).
+
+Slide line: *"A .NET call from ABL costs ~3 µs. Call .NET for a result, not for every step."*
 
 ---
 
@@ -960,16 +1013,11 @@ it."*
 
 ## 9. Open problems
 
-1. **Haversine is ~15× slower than Mike Fechner's 2023 figure** (29.8 s on .NET 8 vs ~1.9 s on
-   Windows/.NET 6). ~6 bridge crossings × 500,000 iterations at ~10 µs each makes the arithmetic
-   plausible, but the gap against 2023 is too large to present unexplained. Not yet investigated:
-   whether the 2023 workload made fewer bridge calls per iteration, or whether `DECIMAL` ↔
-   `System.Double` marshalling dominates. **Keep this row off the slide until resolved.**
-2. **Why .NET cannot see child exits in a PASOE agent** (§8.4). Behaviour reproduced on fresh
+1. **Why .NET cannot see child exits in a PASOE agent** (§8.4). Behaviour reproduced on fresh
    agents; cause not proven (SIGCHLD blocked on 11 of 12 agent threads is the lead). Worth a
    Progress support case before the talk mentions it as a defect — and worth checking on a
    certified RHEL-family system, since this box is Ubuntu.
-3. **Why there is no 15740 message under `WAIT-FOR … PAUSE`** (§8.2) — observed 3/3, not explained.
-4. **Ubuntu 26.04 is not on the OpenEdge 13.0 Platform Compatibility Guide** (not checked against
+2. **Why there is no 15740 message under `WAIT-FOR … PAUSE`** (§8.2) — observed 3/3, not explained.
+3. **Ubuntu 26.04 is not on the OpenEdge 13.0 Platform Compatibility Guide** (not checked against
    the guide itself). All numbers come from an uncertified distribution.
-5. **Screenshots are SVG, not PNG** — no ImageMagick or PIL on the box.
+4. **Screenshots are SVG, not PNG** — no ImageMagick or PIL on the box.

@@ -84,3 +84,68 @@ Put the medians from `results-*.md` into the slide "The Numbers".
 ## Results
 
 (to be filled in)
+
+---
+
+## Fixes made on the first real run (02.11.2026, OpenEdge 13.0 / .NET 8.0.33, Ubuntu 26.04 WSL)
+
+The draft had never been compiled. Three things needed changing; workloads and iteration
+counts were **not** touched.
+
+### 1. `run-all.p` — `Check` is a reserved word
+
+```
+** Unable to understand after -- "as int64  field". (247)
+** Unable to understand DEFINE statement. (267)
+Unknown or ambiguous table ttRun. (725)
+```
+
+`field Check as character` in `ttRun` does not compile. Renamed to **`CheckValue`**
+(definition plus the two references).
+
+### 2. `wl-zip-shell.p` — SUBSTITUTE collapsed `&&` into `&`
+
+The serious one: it silently measured and checked the wrong thing.
+
+```
+substitute("cd &1 && zip -q -r &2 .", quoter(pcArg), quoter(cZip))
+```
+
+`SUBSTITUTE` treats `&` as its placeholder marker, so `&&` came out as a single `&`:
+
+```
+cd "/data/tree" & zip -q -r "/tmp/bench-shell.zip" .
+```
+
+That **backgrounds the `cd`** and runs `zip` in the *current* directory. The workload therefore
+archived the `05-benchmarks` folder and reported a check value of **19** against the .NET side's
+**10000** — the mismatch is what exposed it.
+
+Fixed by building the command with plain concatenation instead of `SUBSTITUTE`:
+
+```
+os-command silent value("cd " + quoter(pcArg) + " && zip -q -r " + quoter(cZip) + " .").
+```
+
+The same change was applied to the `unzip -Z1 ... | grep -v '/$' | wc -l` pipeline.
+
+**Lesson worth repeating on a slide:** never build a shell command containing `&&` or `&` with
+`SUBSTITUTE`. The check values are what caught this — without them the zip row would have gone on
+the slide as "ABL zip is 20x faster than .NET", measured on 19 files against 10,000.
+
+### 3. `-assemblies` and PROPATH
+
+Run with the repo's shared `assemblies/` folder (`../assemblies`), which needs entries for
+`System.IO.Compression`, `System.IO.Compression.ZipFile`, `System.Diagnostics.Process`,
+`System.Security.Cryptography`, `System.Security.Cryptography.X509Certificates` and
+`System.Text.RegularExpressions`. The simple assembly name is sufficient — no Version or
+PublicKeyToken. Types in System.Runtime (Directory, File, Math, StringBuilder, List<T>, Task<T>)
+need no entry at all.
+
+### Added workload: `wl-zip-scl.p`
+
+A third zip variant was added at Peter's request: the SmartComponent Library's **pure ABL**
+`ZipArchiveWriter` (`Consultingwerk/Framework/Compression`, SCL-6170). This gives the zip row a
+genuine ABL implementation instead of only a shell-out. It needs the SCL ABL tree on PROPATH.
+SCL documents the writer as intended for small archives (a few MB, no Zip64), so the 10,000-file
+tree is deliberately outside its design envelope; the README table reports it as such.

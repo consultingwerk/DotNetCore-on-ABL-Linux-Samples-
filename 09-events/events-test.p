@@ -28,7 +28,7 @@ Directory:CreateDirectory(cDir).
 MESSAGE "-- FileSystemWatcher:Created --".
 ASSIGN oWatcher = NEW FileSystemWatcher(cDir)
        oWatcher:EnableRaisingEvents = TRUE.
-oWatcher:Created:Subscribe(OnFileCreated).
+oWatcher:Created:Subscribe("OnFileCreated").
 
 File:WriteAllText(cDir + "/trigger.txt", "hello").
 
@@ -46,7 +46,7 @@ ASSIGN oInfo = NEW ProcessStartInfo("/bin/sleep", "1")
        oProc = NEW Process()
        oProc:StartInfo = oInfo
        oProc:EnableRaisingEvents = TRUE.
-oProc:Exited:Subscribe(OnProcessExited).
+oProc:Exited:Subscribe("OnProcessExited").
 oProc:Start().
 
 DO iWait = 1 TO 40:

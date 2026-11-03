@@ -236,6 +236,9 @@ negative (`-2496`), which is a good second example if you have time on stage.
 | D4 | 19 | implies .NET is faster at walking files | **ABL is faster** (24 ms vs 37 ms / 10,000 files) |
 | D5 | 24 | `ChainStatus:GetValue(i):Status` | Needs `CAST(..., X509ChainStatus)` |
 | D6 | — | sslc needs proenv | **Not for x509/verify** on 13.0 Linux |
+| D7 | Pitfalls | "Events: test first" | Tested: background-thread events **do not reach ABL** (15740), §8.2 |
+| D8 | Pitfalls | (new) | Regex in ABL strings: `{n}` and `\d` are silently rewritten, differently on Linux and Windows, §8.1 |
+| D9 | Pitfalls | `-casesensitiveclasses` | On Linux the filesystem decides; the parameter does not help, §6.12 |
 
 ### D1 — slide 17 speaker note: recursion with the unnamed stream
 
@@ -751,19 +754,149 @@ Three conclusions, all slide-worthy:
 
 ---
 
-## 8. Open problems
+## 8. P4 — nice to have
+
+### 8.1 04-more — regex, Haversine, time zones
+
+```bash
+./env/run.sh 04-more/regex.p
+./env/run.sh 04-more/haversine.p
+./env/run.sh 04-more/timezone.p
+```
+
+```
+IBAN looks valid : yes
+date   : 2026-11-04
+time   : 15:00:12
+level  : ERROR
+agent  : 7
+
+Amsterdam -> Manchester: 494.6 km
+
+zone         : (UTC+01:00) Central European Time (Amsterdam)
+UTC 12:00 in January -> 01/15/2026 13:00:00.000
+UTC 12:00 in July    -> 07/15/2026 14:00:00.000
+ABL TIMEZONE (fixed) : 60
+```
+
+All correct: 494.6 km is the real great-circle distance, and `TimeZoneInfo` applies daylight
+saving (+1 h in January, +2 h in July) where ABL only knows a fixed offset of 60 minutes.
+`FindSystemTimeZoneById("Europe/Amsterdam")` needs `tzdata` on the box (present).
+
+**New pitfall found here: regex patterns in ABL string literals are silently rewritten.**
+
+```
+MESSAGE "^[A-Z]{2}[0-9]{2}x".        ->  ^[A-Z][0-9]x          (no error)
+MESSAGE "(\d{4})\w+".                ->  (d)w+                 (no error, Linux only)
+"...([A-Z0-9]?){0,16}$"              ->  error 21104: "0,16" included ... was not found
+```
+
+- `{n}` is an include-argument reference to the ABL preprocessor, so `{2}` becomes an empty string
+  even inside a string literal. Escape as `~{2~}`.
+- `\` is an escape character in ABL strings **on UNIX but not on Windows**, so `\d` arrives as `d`.
+  Write `\\d`.
+- So the same source line hands .NET a **different regex on Linux than on Windows**, with no
+  compile error and no runtime error — the match simply fails or matches the wrong thing.
+  Working form: `"(\\d~{4~})\\w+"`.
+
+### 8.2 09-events — are .NET events delivered on Linux?
+
+**No, not for the events tested.** Both events fire, but the bridge refuses to call the ABL handler:
+
+```
+-- FileSystemWatcher:Created --
+You are trying to use a multi-threaded .NET object in a way that is not supported.
+The ABL cannot be called on a thread other than the main thread. (15740)
+   at Progress.ClrBridge.BrgClrToPro.IsSessionThreadId(Boolean throwException)
+   at Progress.ClrBridge.BrgClrToPro.HandleEvent(...)
+   at SystemIOFileSystemWatcherCreatedReceiver.OnCreated(Object, FileSystemEventArgs)
+   at System.IO.FileSystemWatcher.RunningInstance.ProcessEvents()
+   handler called: no  after 21 polls
+-- Process:Exited --
+... (15740) ...
+   at System.Diagnostics.Process.RaiseOnExited()
+   at System.Threading.PortableThreadPool.WorkerThread.WorkerThreadStart()
+   handler called: no  after 41 polls
+   process HasExited: yes
+```
+
+| Main thread waits with | Handler runs? | Error shown? |
+|---|---|---|
+| `PROCESS EVENTS` + `PAUSE 0.1` loop (`events-test.p`) | no | yes, 15740 |
+| `WAIT-FOR "U1" OF THIS-PROCEDURE PAUSE 2` (`events-waitfor.p`) | no | **no — silent** (3 of 3 runs) |
+
+Both `FileSystemWatcher` and `Process.Exited` raise their events on a .NET worker thread, and the
+bridge only calls ABL on the session's main thread. Nothing the main thread does changes that.
+The same applies by construction to `Process.OutputDataReceived` (`BeginOutputReadLine`),
+`System.Threading.Timer` and async callbacks.
+
+Note the handler must be subscribed by **name as a string** for an internal procedure:
+`oWatcher:Created:Subscribe("OnFileCreated")`. Unquoted gives error 201.
+
+**For the Pitfalls slide** ("Events: test first"): *events raised on a .NET background thread do
+not reach ABL — error 15740, or nothing at all under WAIT-FOR. Poll instead (`HasExited`,
+`WaitForExit(ms)`), or use a Task and read `:Result` on the main thread.* This is why
+`run-net.p` drains stdout with `ReadToEndAsync()` + `:Result` rather than `BeginOutputReadLine`.
+
+### 8.3 08-facade — a C# library called from ABL
+
+`08-facade/Demo.Interop` (net8.0): two static methods, ~40 lines.
+
+- `Certs.Check(string certPath, string caPath)` → JSON with subject, issuer, notAfterUtc,
+  daysLeft, valid, reasons.
+- `Certs.RsaKeySizeFromPem(string pem)` → wraps the Span-only `RSA.ImportFromPem`.
+
+```bash
+cd 08-facade/Demo.Interop && dotnet build -c Release      # needs the .NET 8 SDK (8.0.427 used)
+cp bin/Release/net8.0/Demo.Interop.dll ../../assemblies/
+./env/run.sh 08-facade/check-cert-facade.p -param "03-security/certs/partner.pem,03-security/certs/ca.pem"
+```
+
+```
+subject : O=PUG Challenge Demo, CN=partner.example
+valid   : yes
+raw JSON:
+{"subject":"O=PUG Challenge Demo, CN=partner.example","issuer":"O=PUG Challenge Demo, CN=Demo Root CA","notAfterUtc":"2029-02-04T16:09:56.0000000Z","daysLeft":824,"valid":true,"reasons":[]}
+RSA key size via facade (ImportFromPem): 2048
+```
+
+And for `stranger.pem`: `valid : no`, `"reasons":["PartialChain - unable to get local issuer certificate"]`.
+
+Registration is one line in `assemblies.xml` with the DLL in the same folder:
+`<assembly name="Demo.Interop"/>`. Build: 2 s, 0 warnings.
+
+Speaker-note material: the facade removes every ABL-side wrinkle found in this project at once —
+the `ChainStatus` cast (D5), the Span overload (14457), the GMT/local-time mismatch (it returns
+UTC) — and leaves ABL with one call and a `JsonObject`. The cost is a build step and a DLL to
+deploy.
+
+### 8.4 06-pasoe — blocked
+
+`$DLC/servers/pasoe` is `root:root`, mode `0770`, so the demo user cannot read it:
+
+```
+$ pasman create -v -f -p 8810 -P 8811 -s 8812 ~/pasoe/demo
+Pacific Application Server administration script could not be found.
+Script not found: /Progress/OpenEdge130_64/servers/pasoe/bin/tcman.sh
+```
+
+The licence does include the production AppServer (`Progress ProdAS for OE`), so this is a
+permissions problem only. `06-pasoe/README.md` documents the `agentStartupParam` line and the
+`DOTNET_ROOT` trap, unverified.
+
+---
+
+## 9. Open problems
 
 1. **Haversine is ~15× slower than Mike Fechner's 2023 figure** (29.8 s on .NET 8 vs ~1.9 s on
    Windows/.NET 6). ~6 bridge crossings × 500,000 iterations at ~10 µs each makes the arithmetic
    plausible, but the gap against 2023 is too large to present unexplained. Not yet investigated:
    whether the 2023 workload made fewer bridge calls per iteration, or whether `DECIMAL` ↔
    `System.Double` marshalling dominates. **Keep this row off the slide until resolved.**
-2. **PASOE not verified.** `06-pasoe/README.md` documents the `agentStartupParam` setting and the
-   `DOTNET_ROOT` trap, but no instance was created, so the shared-CLR and `Process:Start`-vs-
-   `OS-COMMAND`-in-an-agent questions are unanswered.
-3. **04-more and 09-events written but not yet run** (held back so they would not disturb the
-   benchmark timings).
-4. **08-facade not started.** Needs the .NET 8 SDK, which is not installed.
-5. **Ubuntu 26.04 is not on the OpenEdge 13.0 Platform Compatibility Guide** (not checked against
+2. **PASOE not verified** — `$DLC/servers/pasoe` is root-only (0770), see §8.4. Unanswered: does
+   one agent share one CLR across sessions, and is `Process:Start` from an agent spared the
+   slowdown KB 000207833 reports for `OS-COMMAND`.
+3. **Why there is no 15740 message under `WAIT-FOR … PAUSE`** (§8.2) — observed 3/3, not explained.
+4. **Ubuntu 26.04 is not on the OpenEdge 13.0 Platform Compatibility Guide** (not checked against
    the guide itself). All numbers come from an uncertified distribution.
-6. **Screenshots are SVG, not PNG** — no ImageMagick or PIL on the box.
+5. **Screenshots are SVG, not PNG** — no ImageMagick or PIL on the box.

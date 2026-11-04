@@ -15,4 +15,12 @@ shift || true
 # Every demo folder on PROPATH, so classes resolve from anywhere.
 export PROPATH="$REPO,$(find "$REPO" -maxdepth 1 -type d -name '[0-9]*' | sort | paste -sd,)"
 
-exec "$DLC/bin/_progres" -b -clrnetcore -assemblies "$REPO/assemblies" -p "$REPO/$PROG" "$@"
+CMD=("$DLC/bin/_progres" -b -clrnetcore -assemblies "$REPO/assemblies" -p "$REPO/$PROG" "$@")
+
+# Batch mode refuses to write to a terminal (error 165), so pipe through cat
+# when stdout is a TTY. pipefail keeps _progres's exit code.
+if [ -t 1 ]; then
+    "${CMD[@]}" | cat
+else
+    exec "${CMD[@]}"
+fi

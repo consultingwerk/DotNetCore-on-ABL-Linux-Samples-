@@ -52,18 +52,16 @@ Benchmarks: `cd 05-benchmarks && TREE=/data/tree ./run.sh net8` (see `05-benchma
 
 | Folder | Contents |
 |---|---|
-| `env/` | `run.sh` launcher, `mkshot.py` (SVG screenshots) |
+| `env/` | `run.sh` launcher |
 | `assemblies/` | `assemblies.xml` and the `Demo.Interop.dll` facade |
-| `00-hello/` | runtime identification, slide 9 basics |
+| `00-hello/` | runtime identification, basic .NET constructs |
 | `01-files/` | directory walk ABL vs .NET, zip ABL vs .NET, demo 1 |
-| `02-process/` | `INPUT THROUGH` vs `System.Diagnostics.Process`, KB checks, demo 2 |
+| `02-process/` | `INPUT THROUGH` vs `System.Diagnostics.Process`, demo 2 |
 | `03-security/` | sslc vs `X509Certificate2`/`X509Chain`, demo 3 |
 | `04-more/` | regex, Haversine, time zones |
 | `05-benchmarks/` | the benchmark harness and workloads |
-| `06-pasoe/` | PASOE configuration notes (unverified) |
+| `06-pasoe/` | running .NET in a PASOE agent: setup and sample programs |
 | `08-facade/` | C# library `Demo.Interop` (net8.0) and its ABL caller |
-| `09-events/` | do .NET events reach ABL on Linux? (no — error 15740) |
-| `screenshots/` | fallback screenshots per demo |
-| `results.md` | all results, slide corrections and open problems |
+| `09-events/` | subscribing to .NET events from ABL |
 
 MIT licence, see `LICENSE`. All certificates are generated throw-away test material.

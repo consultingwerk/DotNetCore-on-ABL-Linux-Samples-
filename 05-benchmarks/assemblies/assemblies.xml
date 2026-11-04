@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<references xsi:noNamespaceSchemaLocation="assemblies.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <!-- DRAFT. Add an entry here if the compiler cannot resolve a .NET type, e.g.
-       System.IO.Compression.ZipFile. Exact assembly names and versions for .NET 8
-       to be confirmed on the 13.0 installation (record what was needed in README.md). Example:
-  <assembly name="System.IO.Compression.ZipFile, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089"/>
-  -->
-</references>

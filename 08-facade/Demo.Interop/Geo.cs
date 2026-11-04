@@ -1,8 +1,8 @@
 namespace Demo.Interop;
 
 /// <summary>
-/// The Haversine distance in one call, for 05-benchmarks/haversine-analysis.p:
-/// the same maths as wl-haversine.p, but crossing the ABL/.NET bridge once
+/// The Haversine distance in one call, for comparison with 05-benchmarks/wl-haversine.p:
+/// the same maths, but crossing the ABL/.NET bridge once
 /// per distance instead of 13 times.
 /// </summary>
 public static class Geo

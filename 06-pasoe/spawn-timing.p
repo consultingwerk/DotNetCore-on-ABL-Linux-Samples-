@@ -1,8 +1,8 @@
 /* spawn-timing.p - KB 000207833 says OS-COMMAND gets slower as the agent grows.
    Grows this agent by piGrowMB of touched memory, then times piCount starts of
    /bin/echo via OS-COMMAND and via System.Diagnostics.Process.
-   NOTE: in a PASOE agent Process:WaitForExit() never sees the child exit
-   (see sigchld/). Completion is therefore detected by reading stdout to EOF,
+   NOTE: in a PASOE agent Process:WaitForExit() never sees the child exit.
+   Completion is therefore detected by reading stdout to EOF,
    and the exit code is not available. */
 BLOCK-LEVEL ON ERROR UNDO, THROW.
 
